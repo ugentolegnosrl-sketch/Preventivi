@@ -134,6 +134,8 @@ header h1 span{color:#C9A15E;font-weight:600}
 }
 .mrow input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
 .mrow input.mr-pz{border-style:dashed;background:#FAFAF7}
+.mrow input::placeholder{color:#B7B0A2;font-style:italic;opacity:1}
+.mrow input.mr-inherit::placeholder{color:#8FA3C0;font-style:italic;opacity:1}
 .mrow .del{
   background:none;border:1px solid var(--line);border-radius:7px;color:var(--muted);
   font-size:16px;height:38px;
@@ -918,8 +920,9 @@ function renderModes() {
 let mrowSeq = 0;
 function addMultiRow(L, W, S, P) {
   const box = $("mrowsBox");
-  // solo la PRIMA riga si pre-compila (dall'articolo): fissa lunghezza e spessore per tutte.
-  // le righe successive restano vuote su L/S ed ereditano dalla prima.
+  // solo la PRIMA riga si pre-compila davvero (dall'articolo).
+  // le righe successive mostrano lunghezza e spessore della prima come suggerimento
+  // (testo grigio, campo vuoto): se le lasci così valgono quelli, altrimenti scrivi il tuo.
   if (L == null && S == null && !box.querySelectorAll(".mrow").length && selArt) {
     const al = selArt.mag_l_mm != null ? selArt.mag_l_mm : selArt.lunghezza_mm;
     const as = selArt.mag_s_mm != null ? selArt.mag_s_mm : selArt.spessore_mm;
@@ -931,12 +934,37 @@ function addMultiRow(L, W, S, P) {
   div.className = "mrow";
   div.id = id;
   div.innerHTML =
-    '<input class="mr-l" inputmode="decimal" value="' + (L || "") + '" placeholder="prima riga" title="Lunghezza — se vuota, usa quella della prima riga">' +
+    '<input class="mr-l" inputmode="decimal" value="' + (L || "") + '" title="Lunghezza — se la lasci vuota vale quella della 1ª riga">' +
     '<input class="mr-w" inputmode="decimal" value="' + (W || "") + '" placeholder="misura">' +
-    '<input class="mr-s" inputmode="decimal" value="' + (S || "") + '" placeholder="prima riga" title="Spessore — se vuoto, usa quello della prima riga">' +
+    '<input class="mr-s" inputmode="decimal" value="' + (S || "") + '" title="Spessore — se lo lasci vuoto vale quello della 1ª riga">' +
     '<input class="mr-pz" inputmode="numeric" value="' + (P || "") + '" title="Pezzi — solo nota, non entra nel calcolo">' +
     '<button type="button" class="del" title="Elimina riga" aria-label="Elimina riga">×</button>';
   box.appendChild(div);
+  syncMultiPlaceholders();
+}
+
+/* Le righe dopo la prima mostrano lunghezza e spessore della prima riga come
+   semplice suggerimento: il campo resta vuoto, quindi non c'è nulla da cancellare. */
+function syncMultiPlaceholders() {
+  const rows = document.querySelectorAll("#mrowsBox .mrow");
+  if (!rows.length) return;
+  const l0 = rows[0].querySelector(".mr-l").value.trim();
+  const s0 = rows[0].querySelector(".mr-s").value.trim();
+  rows.forEach((row, i) => {
+    const l = row.querySelector(".mr-l");
+    const s = row.querySelector(".mr-s");
+    if (i === 0) {
+      l.placeholder = "lunghezza";
+      s.placeholder = "spessore";
+      l.classList.remove("mr-inherit");
+      s.classList.remove("mr-inherit");
+      return;
+    }
+    l.placeholder = l0 || "come 1ª riga";
+    s.placeholder = s0 || "come 1ª riga";
+    l.classList.toggle("mr-inherit", l.value.trim() === "");
+    s.classList.toggle("mr-inherit", s.value.trim() === "");
+  });
 }
 
 /* ================= VISIBILITÀ CAMPI ================= */
@@ -981,18 +1009,19 @@ function getMultiRowsData() {
     if (baseS != null && isNaN(baseS)) baseS = null;
   }
   divs.forEach((div) => {
-    let L = parseNum(div.querySelector(".mr-l").value);
-    const W = parseNum(div.querySelector(".mr-w").value);
-    let S = parseNum(div.querySelector(".mr-s").value);
-    const P = parseNum(div.querySelector(".mr-pz").value);
     const rawL = div.querySelector(".mr-l").value.trim();
+    const rawW = div.querySelector(".mr-w").value.trim();
     const rawS = div.querySelector(".mr-s").value.trim();
+    const rawP = div.querySelector(".mr-pz").value.trim();
+    // riga ancora del tutto vuota: la ignoro, così non fa comparire errori
+    if (rawL === "" && rawW === "" && rawS === "" && rawP === "") return;
+    let L = parseNum(rawL);
+    let S = parseNum(rawS);
+    const W = parseNum(rawW);
+    const P = parseNum(rawP);
     // se lunghezza/spessore vuoti su questa riga → prendono quelli della prima riga
     if (rawL === "") L = baseL;
     if (rawS === "") S = baseS;
-    if (L == null && W == null && S == null && P == null &&
-        rawL === "" && div.querySelector(".mr-w").value.trim() === "" &&
-        rawS === "" && div.querySelector(".mr-pz").value.trim() === "") return; // riga vuota
     rows.push({ L, W, S, P });
   });
   return rows;
@@ -1253,10 +1282,11 @@ $("btnPulisci").addEventListener("click", () => {
 $("artClear").addEventListener("click", clearArticle);
 
 $("btnAddRow").addEventListener("click", () => { addMultiRow(); refresh(); });
-$("multiRows").addEventListener("input", refresh);
+$("multiRows").addEventListener("input", () => { syncMultiPlaceholders(); refresh(); });
 $("multiRows").addEventListener("click", (e) => {
   if (e.target.classList.contains("del")) {
     e.target.closest(".mrow").remove();
+    syncMultiPlaceholders();
     refresh();
   }
 });
@@ -1970,4 +2000,4 @@ vaiA("calc");
 syncListino(true);
 </script>
 </body>
-</html> 
+</html>
